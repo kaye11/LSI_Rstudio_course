@@ -1,8 +1,8 @@
 library(tidyverse)
+source("D:/R program/resizewin.R")
 
 
-# sourse some packages and functions --------------------------------------
-
+# source some packages and functions --------------------------------------
 # you can use Ctr+Shift+R to insert new code section - these show up in the toc
 #you can source several packages and functions, listed in one file
 source("code/packages_and_functions.R")
@@ -56,9 +56,17 @@ iris %>%
   theme_minimal() +
   facet_wrap(vars(Species))
 
+library(datasets)
 #try the Esquisse 'ggplot2 builder' add-on
-library(esquisse)
+library(esquisse) 
+#esquisser(viewer = "browser")
+esquisse::set_i18n("fr") # change language
+#esquisser(viewer = "pane")
 help("esquisse")
+esquisser()
+
+
+
 
 
 # modify legends ----------------------------------------------------------
@@ -66,15 +74,17 @@ help("esquisse")
 #another plot - changing the legends
 iris %>%  
   ggplot(aes(x = Sepal.Length, y = Sepal.Width, color = Species)) +
-  geom_point() +
+  geom_point(size=1.5) +
   theme_minimal() +
   facet_wrap(vars(Species)) +
   labs(x = "x axis label", y = "y axis label") +
   theme_minimal() +
-  theme(legend.position = "left")
+  theme(legend.position = "bottom")+
+  labs (x = "length", y = "width")
+  #scale_color_manual(Okabe_Ito)
 
 #saving a plot
-ggsave("pictures/iris_test.png", bg = "white")
+ggsave("pictures/iris_test.png", bg = "white", width=9, height=6, unit="in")
 
 
 # Tibbles - tidy your data ------------------------------------------------
@@ -114,7 +124,9 @@ tb %>%
 # Example dataset from from Barnali ---------------------------------------
 
 Syn_data <- read_csv("data/a-Syn-Data.csv")
+
 Syn_data
+
 
 #Need to do some tidying...
 
@@ -122,20 +134,29 @@ Syn_data
 Syn_tb <- Syn_data %>%
   rename_with(~ gsub("_", "-", .x, fixed = TRUE)) %>%
   rename_with(~ gsub("...", "_", .x, fixed = TRUE)) %>%
-  pivot_longer(matches("aSyn"), 
+  pivot_longer(matches("aSyn"), #makes wide to long (alternative to melt or reshape)
                names_to = c("condition", "sample"), names_sep = "_",
                values_to = "fluorescence") %>%
   group_by(condition)
 
-Syn_tb
+Syn_tb$sample_cr = rep_len(seq(1, 3, 1), length.out=4416)
+
+
 #Let's plot the tidied tibble
 
 Syn_tb %>%
   ggplot(aes(x = Time, y = fluorescence, color = condition)) +
   geom_smooth() +
-  theme_minimal()
+  theme_minimal() +facet_grid (~condition)
 
 ggsave("pictures/synuclein_data.png", bg = "white")
+
+Syn_tb %>%
+  ggplot(aes(x = Time, y = fluorescence, color = condition, group=condition)) +
+  geom_smooth(level = 0.99, size = 0.5, span = 0.1, method = "loess") +
+  geom_line(aes(group = sample), size =  0.5, alpha = 0.3) +
+  theme_classic() +
+  facet_grid(~condition)
 
 
 # Example data from Kei ---------------------------------------------------
@@ -152,11 +173,33 @@ Ca %>%
   ggplot(aes(x = frame, y = intensity, color = genotype, 
              group = genotype)) +
   geom_smooth(level = 0.99, size = 0.5, span = 0.1, method = "loess") +
-  geom_line(aes(group = sample), size =  0.5, alpha = 0.1) +
+  geom_line(aes(group = sample), size =  0.5, alpha = 0.1) + ##sort of a reference (can probably also identify a rep as a sample plot)
   theme_classic() +
   facet_wrap(vars(cell))
 
 ggsave("pictures/Kei_NOS_data.png", bg = "white")
+
+
+ggplot(data= Ca, aes(x = frame, y = intensity, color = genotype, 
+             group = genotype)) +
+  geom_smooth(level = 0.99, size = 0.5, span = 0.1, method = "loess") +
+  geom_line(aes(group = sample), size =  0.5, alpha = 0.1) + ##sort of a reference (can probably also identify a rep as a sample plot)
+  theme_classic() +
+  facet_wrap(cell~genotype) +
+  scale_color_manual(values = c( "#999999", "#E69F00", "#56B4E9"))+
+  theme (axis.title.x = element_text (size=14, face="bold"), axis.title.y = element_text (face="bold"))
+
+#boxplot
+
+Ca %>%
+  mutate (bin = cut_width(frame, width=5, boundary=0)) %>%
+  ggplot(aes(x = bin, y = intensity, fill = genotype)) +
+  geom_boxplot() +
+  facet_grid (genotype~.)
+
+
+
+
 
 
 # Example data from Tom ---------------------------------------------------
@@ -193,6 +236,10 @@ filo_raw_tb_int %>%
 ggsave("pictures/Tom_filo_data.png", bg = "white")
 
 
+# multi-panel data --------------------------------------------------------
+
+
+library(magick)
 # Assemble multi-panel figures with cowplot and patchwork -----------------
 
 ### read the images with readPNG from pictures/ folder
@@ -226,26 +273,29 @@ panelD
 
 # Adding scale bars -------------------------------------------------------
 
-panelE <- ggdraw() + draw_image(img5, scale = 1) + 
-  draw_line(x = c(0.1, 0.3), y = c(0.07, 0.07), color = "black", size = 0.5)
+panelE <- ggdraw() + draw_image(img5, scale = 1) + #img5 has no scalebars, scale is what is the calibration
+  draw_line(x = c(0.1, 0.3), y = c(0.07, 0.07), color = "black", size = 2) #putting a scalebar, x and y can change position, size is the thickness of scalebar
 panelE
-
 
 # Assemble figure with patchwork ------------------------------------------
 
 # First, we define the layout with textual representation (cool and intuitive!)
 
-layout <- "ABCDE"
+layout <- "ABCDE" #this changes the size of your figure
+
+resize.win(9,6)
 
 #define figure panels, layout, annotations and theme
 Figure1 <- panelA + panelB + panelC + panelD + panelE +
-  patchwork::plot_layout(design = layout, heights = c(1, 1)) +
+  plot_spacer() +
+  patchwork::plot_layout(design = layout, heights = c(1, 1,1, 1, 1)) +
   patchwork::plot_annotation(tag_levels = "A") &
   ggplot2::theme(plot.tag = element_text(size = 12, face='plain'))
+  
 
 #save figure as png (pdf also works)
 ggsave("figures/Figure1.png", limitsize = FALSE, 
-       units = c("px"), Figure1, width = 4000, height = 800, bg = "white")
+       units = c("px"), Figure1, width = 4000, height = 1000, bg = "white")
 
 
 #Change the layout of the panels
